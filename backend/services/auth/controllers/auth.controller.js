@@ -4,6 +4,9 @@ import { app } from "../config/firebase.js"
 import User from "../models/user.model.js"
 import crypto from "crypto";
 import {createConnection} from "mongoose"
+import redis from "../../../shared/redis/redis.js"
+
+
 
 export const login = async (req,res)=>{
      console.log("Login called");
@@ -29,12 +32,19 @@ export const login = async (req,res)=>{
         }
 
         const sessionId = crypto.randomUUID()
+        // redis--------
+        await redis.set(`session-${sessionId}`,JSON.stringify({
+            userId:user._id,
+            name:user.name,
+            email:user.email,
+            avatar:user.avatar
+        }), "EX",7*24*60*60)
         
         res.cookie("session", sessionId, {
             httpOnly:true,
-            secure:false,
+            secure:false, 
             sameSite:"strict",
-            maxAge:7*24*60*601000 //7days
+            maxAge:7*24*60*60*1000 //7days
         })
         
           console.log("Sending response");
@@ -44,5 +54,19 @@ export const login = async (req,res)=>{
     }
     catch(error){
         return res.status(500).json({message:`login error - ${error}`})
+    }
+}
+
+
+export const logOut = async (req,res)=>{
+    try{
+        const sessionId = req.cookies?.session
+        await redis.del(`session-${sessionId}`) // deleted from redis
+
+        res.clearCookie("session")
+        return res.status(200).json({message:"Logged out successfully"})
+    
+    }catch(error){
+        return res.status(500).json({message:`logout error - ${error}`})
     }
 }
